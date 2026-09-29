@@ -199,6 +199,7 @@ void register_foundation(ObjcRuntime& o)
     foundation::register_json(o);
     foundation::register_system(o);
     foundation::register_url_session(o);
+    foundation::register_containers_io(o);
     foundation::register_runtime_classes(o);
     cf::register_corefoundation(o);
 }

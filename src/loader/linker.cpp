@@ -579,6 +579,7 @@ void Linker::run_initializers(Cpu& cpu, GuestAddr argc, GuestAddr argv, GuestAdd
 {
     for (auto& img : images_)
         if (img->from_cache) init_image(cpu, *img, argc, argv, envp, apple);
+    rt_.objc->attach_stub_categories(cpu);
     for (size_t i = 1; i < images_.size(); ++i)
         init_image(cpu, *images_[i], argc, argv, envp, apple);
     init_image(cpu, main_image(), argc, argv, envp, apple);

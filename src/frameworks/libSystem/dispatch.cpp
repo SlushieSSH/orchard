@@ -365,13 +365,16 @@ void register_queues(Hle& h)
     h.data("__dispatch_source_type_timer", [](Runtime& rt) { return rt.mem.alloc_system(16, 16); });
 
     h.fn("_dispatch_get_global_queue", [](Cpu& c) { c.ret(st().global->obj); });
-    h.fn("_dispatch_queue_create", [](Cpu& c) {
+    auto queue_create = [](Cpu& c) {
         static GuestAddr concurrent = c.rt.hle.resolve("__dispatch_queue_attr_concurrent", "libdispatch");
         bool serial = c.arg(1) != concurrent;
         GuestAddr obj = new_object(c, serial ? "OS_dispatch_queue_serial" : "OS_dispatch_queue_concurrent");
         make_queue(c.rt, obj, c.arg(0) ? c.mem.read_cstr(c.arg(0)) : "", serial);
         c.ret(obj);
-    });
+    };
+    h.fn("_dispatch_queue_create", queue_create);
+    h.fn("_dispatch_queue_create_with_target$V2", queue_create);
+    h.fn("_dispatch_queue_create_with_target", queue_create);
     h.fn("_dispatch_queue_attr_make_with_qos_class", [](Cpu& c) {
         static GuestAddr concurrent = c.rt.hle.resolve("__dispatch_queue_attr_concurrent", "libdispatch");
         c.ret(c.arg(0) == concurrent ? concurrent : 0);

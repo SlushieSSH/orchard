@@ -102,6 +102,44 @@ std::string thread_name(HANDLE h, DWORD id)
 }
 }
 
+namespace
+{
+LONG WINAPI report_crash(EXCEPTION_POINTERS* info)
+{
+    static std::atomic<bool> busy{false};
+    if (busy.exchange(true)) return EXCEPTION_CONTINUE_SEARCH;
+    HANDLE process = GetCurrentProcess();
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+    SymInitialize(process, nullptr, TRUE);
+    auto* rec = info->ExceptionRecord;
+    std::fflush(stdout);
+    std::fprintf(stderr, "\n[crash] Orchard crashed: exception 0x%08lx at %s\n", rec->ExceptionCode,
+                 symbol(process, uint64_t(rec->ExceptionAddress)).c_str());
+    if (rec->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && rec->NumberParameters >= 2)
+        std::fprintf(stderr, "[crash] %s address 0x%llx\n", rec->ExceptionInformation[0] ? "writing" : "reading",
+                     (unsigned long long)rec->ExceptionInformation[1]);
+    CONTEXT ctx = *info->ContextRecord;
+    STACKFRAME64 frame = {};
+    frame.AddrPC = {ctx.Rip, 0, AddrModeFlat};
+    frame.AddrStack = {ctx.Rsp, 0, AddrModeFlat};
+    frame.AddrFrame = {ctx.Rbp, 0, AddrModeFlat};
+    for (int i = 0; i < 20; ++i)
+    {
+        if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, GetCurrentThread(), &frame, &ctx, nullptr, SymFunctionTableAccess64,
+                         SymGetModuleBase64, nullptr))
+            break;
+        std::fprintf(stderr, "[crash]   %s\n", symbol(process, frame.AddrPC.Offset).c_str());
+    }
+    std::fflush(stderr);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+}
+
+void install_crash_reporter()
+{
+    SetUnhandledExceptionFilter(report_crash);
+}
+
 void name_host_thread(const std::string& name)
 {
     std::wstring w(name.begin(), name.end());
@@ -167,7 +205,7 @@ void start_hitch_monitor(double threshold)
             std::map<std::string, uint64_t> main_counts, busy_threads;
             std::map<std::string, std::map<std::string, uint64_t>> busy_syms;
             uint64_t main_total = 0;
-            while (g_last_present_ns == last)
+            while (g_last_present_ns == last && now_ns() - last < int64_t(6e9))
             {
                 for (auto& t : threads)
                 {
@@ -222,7 +260,10 @@ void start_hitch_monitor(double threshold)
                     std::printf("[hitch]     %s: %5.1f%%  %s\n", b[i].first.c_str(), 100.0 * syms[j].second / b[i].second,
                                 syms[j].first.c_str());
             }
+            if (g_last_present_ns == last) std::printf("[hitch]   still frozen when this report was taken\n");
             std::fflush(stdout);
+            while (g_last_present_ns == last)
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }).detach();
 }

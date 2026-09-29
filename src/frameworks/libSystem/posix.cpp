@@ -37,7 +37,11 @@ struct Fd
     std::vector<std::string> dir_entries;
     size_t dir_pos = 0;
     uint64_t status_flags = 0;
+    int device = 0;
 };
+
+constexpr int kDevRandom = 1, kDevNull = 2;
+void fill_random(Cpu& c, GuestAddr buf, uint64_t len);
 
 std::mutex fds_lock;
 std::unordered_map<int, Fd> fds;
@@ -100,6 +104,18 @@ void fill_stat_tty(Cpu& c, GuestAddr st)
 void do_open(Cpu& c, const std::string& raw, uint64_t flags)
 {
     std::string path = Vfs::normalize(raw, c.rt.vfs.cwd);
+    int device = path == "/dev/urandom" || path == "/dev/random" ? kDevRandom : path == "/dev/null" ? kDevNull : 0;
+    if (device)
+    {
+        Fd fd;
+        fd.guest_path = path;
+        fd.status_flags = flags;
+        fd.device = device;
+        std::lock_guard g(fds_lock);
+        int n = next_fd++;
+        fds[n] = std::move(fd);
+        return c.ret(uint64_t(n));
+    }
     auto host = host_of(c, path);
     if (!host) return c.ret(fail(c, ENOENT_));
     std::error_code ec;
@@ -144,6 +160,12 @@ void do_read(Cpu& c, int n, GuestAddr buf, uint64_t len, int64_t offset)
     if (n == 0) return c.ret(0);
     std::lock_guard g(fds_lock);
     Fd* fd = fd_of(n);
+    if (fd && fd->device == kDevNull) return c.ret(0);
+    if (fd && fd->device == kDevRandom)
+    {
+        fill_random(c, buf, len);
+        return c.ret(len);
+    }
     if (!fd || fd->host < 0) return c.ret(fail(c, fd && fd->dir ? EISDIR_ : EBADF_));
     if (offset >= 0 && _lseeki64(fd->host, offset, SEEK_SET) < 0) return c.ret(fail(c, EINVAL_));
     std::vector<uint8_t> tmp(len);
@@ -165,6 +187,7 @@ void do_write(Cpu& c, int n, GuestAddr buf, uint64_t len, int64_t offset)
     }
     std::lock_guard g(fds_lock);
     Fd* fd = fd_of(n);
+    if (fd && fd->device) return c.ret(len);
     if (!fd || fd->host < 0) return c.ret(fail(c, EBADF_));
     if (offset >= 0 && _lseeki64(fd->host, offset, SEEK_SET) < 0) return c.ret(fail(c, EINVAL_));
     int put = _write(fd->host, tmp.data(), unsigned(len));

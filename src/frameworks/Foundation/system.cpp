@@ -46,11 +46,27 @@ Id bundle_for_path(Cpu& c, const std::string& guest_path)
     std::lock_guard g(bundles_lock);
     if (auto it = bundles_by_path.find(path); it != bundles_by_path.end()) return it->second;
     auto host = c.rt.vfs.to_host(path);
-    if (!host || !fs::is_directory(*host)) return 0;
+    bool system_framework = path.starts_with("/System/Library/") && path.ends_with(".framework");
+    if ((!host || !fs::is_directory(*host)) && !system_framework) return 0;
     Id obj = objc(c).alloc_instance(objc(c).host_class("NSBundle"), 8);
     Bundle& b = bundles[obj];
     b.path = path;
-    if (auto info = read_plist_file(*host / "Info.plist")) b.info = std::move(*info);
+    if (host && fs::is_directory(*host))
+    {
+        if (auto info = read_plist_file(*host / "Info.plist")) b.info = std::move(*info);
+    }
+    else
+    {
+        std::string name = fs::path(path).stem().string();
+        auto text = [](std::string s) {
+            Plist p;
+            p.kind = Plist::Kind::String;
+            p.s = std::move(s);
+            return p;
+        };
+        b.info.kind = Plist::Kind::Dict;
+        b.info.dict = {{"CFBundleIdentifier", text("com.apple." + name)}, {"CFBundleName", text(name)}};
+    }
     bundles_by_path[path] = obj;
     return obj;
 }

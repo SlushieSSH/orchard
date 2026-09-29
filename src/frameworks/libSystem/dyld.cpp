@@ -123,6 +123,71 @@ void register_dyld(Hle& h)
     h.fn("__tlv_atexit", [](Cpu& c) {});
     h.fn("___cxa_thread_atexit", [](Cpu& c) { c.ret(0); });
 
+    auto find_in_header = [](Cpu& c, GuestAddr mh, const std::string& seg, const std::string* sect, uint64_t& size) -> GuestAddr {
+        size = 0;
+        if (!mh || !c.mem.is_mapped(mh, 32) || c.mem.read<uint32_t>(mh) != 0xfeedfacf)
+        {
+            static bool reported = false;
+            if (!reported)
+            {
+                reported = true;
+                std::fprintf(stderr, "[dyld] section lookup on a bad image header 0x%llx from %s\n", (unsigned long long)mh,
+                             c.rt.describe(c.lr()).c_str());
+            }
+            return 0;
+        }
+        uint32_t ncmds = c.mem.read<uint32_t>(mh + 16);
+        int64_t slide = 0;
+        GuestAddr cmd = mh + 32;
+        std::vector<GuestAddr> segments;
+        for (uint32_t i = 0; i < ncmds; ++i)
+        {
+            uint32_t kind = c.mem.read<uint32_t>(cmd), cmdsize = c.mem.read<uint32_t>(cmd + 4);
+            if (kind == 0x19)
+            {
+                segments.push_back(cmd);
+                if (c.mem.read<uint64_t>(cmd + 40) == 0 && c.mem.read<uint64_t>(cmd + 48) != 0)
+                    slide = int64_t(mh) - int64_t(c.mem.read<uint64_t>(cmd + 24));
+            }
+            cmd += cmdsize;
+        }
+        for (GuestAddr s : segments)
+        {
+            if (c.mem.read_cstr(s + 8, 16) != seg) continue;
+            if (!sect)
+            {
+                size = c.mem.read<uint64_t>(s + 32);
+                return c.mem.read<uint64_t>(s + 24) + slide;
+            }
+            uint32_t nsects = c.mem.read<uint32_t>(s + 64);
+            for (uint32_t k = 0; k < nsects; ++k)
+            {
+                GuestAddr sc = s + 72 + GuestAddr(k) * 80;
+                if (c.mem.read_cstr(sc, 16) != *sect) continue;
+                size = c.mem.read<uint64_t>(sc + 40);
+                return c.mem.read<uint64_t>(sc + 32) + slide;
+            }
+        }
+        return 0;
+    };
+    static decltype(find_in_header) s_find = find_in_header;
+    h.fn("_getsectiondata", [](Cpu& c) {
+        std::string seg = c.mem.read_cstr(c.arg(1), 16), sect = c.mem.read_cstr(c.arg(2), 16);
+        uint64_t size = 0;
+        GuestAddr at = s_find(c, c.arg(0), seg, &sect, size);
+        if (c.arg(3)) c.mem.write<uint64_t>(c.arg(3), size);
+        c.ret(at);
+    });
+    h.fn("_getsegmentdata", [](Cpu& c) {
+        std::string seg = c.mem.read_cstr(c.arg(1), 16);
+        uint64_t size = 0;
+        GuestAddr at = s_find(c, c.arg(0), seg, nullptr, size);
+        if (c.arg(2)) c.mem.write<uint64_t>(c.arg(2), size);
+        c.ret(at);
+    });
+    for (const char* n : {"_dyld_shared_cache_some_image_overridden", "__dyld_swift_optimizations_version", "__dyld_is_objc_constant",
+                          "__dyld_has_preoptimized_swift_protocol_conformances"})
+        h.fn(n, [](Cpu& c) { c.ret(0); });
     h.fn("__dyld_find_unwind_sections", [](Cpu& c) {
         auto* img = c.rt.linker->image_containing(c.arg(0));
         if (!img) return c.ret(0);

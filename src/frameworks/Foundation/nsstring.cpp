@@ -374,6 +374,22 @@ void register_nsstring(objc::ObjcRuntime& o)
     });
 
     o.method("NSString", "length", [](Cpu& c) { c.ret(to_utf16(c, c.arg(0)).size()); });
+    o.add_fallback([](Cpu& c, objc::Class* cls, objc::SEL s) -> GuestAddr {
+        if (!cls->is_meta || objc(c).sel_name(objc(c).canonical_sel(s)) != "newTaggedNSStringWithASCIIBytes_:length_:") return 0;
+        static GuestAddr stub = c.rt.hle.make_stub("+[__StringStorage newTaggedNSStringWithASCIIBytes_:length_:]", [](Cpu& k) {
+            std::u16string text(k.arg(3), u'\0');
+            const uint8_t* bytes = k.mem.host(k.arg(2));
+            for (size_t i = 0; i < text.size(); ++i)
+                text[i] = char16_t(bytes[i]);
+            k.ret(new_string(k, std::move(text)));
+        });
+        return stub;
+    });
+    for (const char* sel : {"_fastCStringContents:", "_fastCharacterContents", "_fastUTF8StringContents:"})
+        o.method("NSString", sel, [](Cpu& c) { c.ret(0); });
+    o.method("NSString", "_fastestEncodingInCFStringEncoding", [](Cpu& c) { c.ret(0x08000100); });
+    o.method("NSString", "fastestEncoding", [](Cpu& c) { c.ret(4); });
+    o.method("NSString", "smallestEncoding", [](Cpu& c) { c.ret(4); });
     o.method("NSString", "characterAtIndex:", [](Cpu& c) {
         auto s = to_utf16(c, c.arg(0));
         c.ret(c.arg(2) < s.size() ? s[c.arg(2)] : 0);

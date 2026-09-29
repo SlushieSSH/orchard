@@ -443,6 +443,57 @@ std::string semantic_for(const std::string& attr, bool vertex_input, bool fragme
     return "";
 }
 
+std::string strip_entry_functions(std::string text)
+{
+    std::regex re(R"(\b(vertex|fragment|kernel)\s+[\w:]+\s+\w+\s*\()");
+    std::smatch m;
+    std::string out;
+    while (std::regex_search(text, m, re))
+    {
+        size_t start = size_t(m.position(0));
+        size_t close = match(text, start + size_t(m.length(0)) - 1);
+        size_t brace = close == std::string::npos ? std::string::npos : text.find('{', close);
+        size_t end = brace == std::string::npos ? std::string::npos : match(text, brace);
+        if (end == std::string::npos) break;
+        out += text.substr(0, start);
+        text = text.substr(end);
+    }
+    return out + text;
+}
+
+std::string rewrite_compound_returns(std::string body, const std::function<std::vector<std::string>(const std::string&)>& fields_of)
+{
+    std::regex re(R"(return\s*\(\s*(\w+)\s*\)\s*\{)");
+    std::smatch m;
+    std::string out;
+    while (std::regex_search(body, m, re))
+    {
+        size_t brace = size_t(m.position(0) + m.length(0)) - 1;
+        size_t end = match(body, brace);
+        if (end == std::string::npos) break;
+        std::string type = m[1];
+        std::vector<std::string> names = fields_of(type);
+        std::string code = "{ " + type + " orchard_lit; ";
+        auto parts = split_top(body.substr(brace + 1, end - brace - 2), ',');
+        for (size_t i = 0; i < parts.size(); ++i)
+        {
+            std::string p = std::regex_replace(parts[i], std::regex(R"(^\s+|\s+$)"), "");
+            if (p.empty()) continue;
+            if (p[0] == '.' && p.find('=') != std::string::npos)
+                code += "orchard_lit." + std::regex_replace(p.substr(1, p.find('=') - 1), std::regex(R"(\s+)"), "") + " = " +
+                        p.substr(p.find('=') + 1) + "; ";
+            else if (i < names.size())
+                code += "orchard_lit." + names[i] + " = " + p + "; ";
+        }
+        code += "return orchard_lit; }";
+        size_t semi = body.find_first_not_of(" \t\r\n", end);
+        if (semi != std::string::npos && body[semi] == ';') end = semi + 1;
+        out += body.substr(0, size_t(m.position(0))) + code;
+        body = body.substr(end);
+    }
+    return out + body;
+}
+
 std::string qualifier_for(const std::string& attr)
 {
     if (has_attr(attr, "flat")) return "nointerpolation ";
@@ -537,6 +588,15 @@ Result translate(const std::string& source, const std::string& entry, const Opti
         }
         before = std::regex_replace(before, sre, "");
     }
+    before = strip_entry_functions(before);
+    after = strip_entry_functions(after);
+    body = rewrite_compound_returns(body, [&](const std::string& type) {
+        std::vector<std::string> names;
+        if (auto s = struct_index.find(type); s != struct_index.end())
+            for (auto& f : structs[s->second].fields)
+                names.push_back(f.name);
+        return names;
+    });
     struct Layout
     {
         uint32_t size = 0, align = 4;
@@ -729,14 +789,18 @@ Result translate(const std::string& source, const std::string& entry, const Opti
         {
             std::set<std::string> mine;
             int unused_target = 0;
+            auto field_sem = [&](const MslField& f) {
+                std::string s = semantic_for(f.attr, false, false, unused_target, consts);
+                return s.empty() ? "ORCHARD_" + f.name : s;
+            };
             for (auto& f : st.fields)
-                mine.insert(semantic_for(f.attr, false, false, unused_target, consts));
+                mine.insert(field_sem(f));
             int k = 0;
             for (auto& vf : *opt.vertex_outputs)
             {
                 std::string name = vf.name;
                 for (auto& f : st.fields)
-                    if (semantic_for(f.attr, false, false, unused_target, consts) == vf.semantic) name = f.name;
+                    if (field_sem(f) == vf.semantic) name = f.name;
                 if (!mine.count(vf.semantic)) name = "orchard_unused" + std::to_string(k++);
                 text += "    " + vf.qualifier + vf.type + " " + name + (vf.array ? "[" + std::to_string(vf.array) + "]" : "") + " : " +
                         vf.semantic + ";\n";
@@ -750,6 +814,7 @@ Result translate(const std::string& source, const std::string& entry, const Opti
                 std::string sem =
                     (is_input || is_output) ? semantic_for(f.attr, is_input && r.vertex, is_output && !r.vertex, target, consts) : "";
                 if ((is_input || is_output) && has_attr(f.attr, "point_size")) continue;
+                if (sem.empty() && ((is_output && r.vertex) || (is_input && !r.vertex))) sem = "ORCHARD_" + f.name;
                 std::string ht = hlsl_type(f.type);
                 std::string q = (is_input || is_output) ? qualifier_for(f.attr) : "";
                 text += "    " + q + ht + " " + f.name + (f.array ? "[" + std::to_string(f.array) + "]" : "") +
@@ -870,7 +935,9 @@ Result translate(const std::string& source, const std::string& entry, const Opti
     std::string sig = ret_type + " main(" + signature;
     for (auto& [d, n] : sv_params)
         sig += (sig.back() == '(' ? "" : ", ") + d;
-    h << sig << ")\n{\n" << prologue << translate_expressions(body) << "\n}\n" << translate_expressions(after);
+    std::string ret_semantic;
+    if (ret_type != "void" && !struct_index.count(ret_type)) ret_semantic = r.vertex ? " : SV_Position" : " : SV_Target0";
+    h << sig << ")" << ret_semantic << "\n{\n" << prologue << translate_expressions(body) << "\n}\n" << translate_expressions(after);
     r.hlsl = h.str();
     r.ok = true;
     return r;

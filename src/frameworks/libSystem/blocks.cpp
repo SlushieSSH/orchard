@@ -1,5 +1,6 @@
 #include "frameworks/libSystem/blocks.h"
 
+#include <cstdio>
 #include <cstring>
 #include <intrin.h>
 #include <vector>
@@ -102,6 +103,18 @@ GuestAddr block_copy(Cpu& c, GuestAddr block)
     if (flags & BLOCK_IS_GLOBAL) return block;
 
     GuestAddr desc = c.mem.read<uint64_t>(block + B_DESC);
+    if (!desc || !c.mem.is_mapped(desc, 16))
+    {
+        static bool reported = false;
+        if (!reported)
+        {
+            reported = true;
+            auto* k = c.rt.objc->class_at(c.mem.read<uint64_t>(block));
+            std::fprintf(stderr, "[blocks] copy of a block without a descriptor (isa %s, flags 0x%x) from %s, used as is\n",
+                         k ? k->name.c_str() : "?", flags, c.rt.describe(c.lr()).c_str());
+        }
+        return block;
+    }
     uint64_t size = c.mem.read<uint64_t>(desc + 8);
     GuestAddr copy = c.rt.heap.alloc(size);
     std::memcpy(c.mem.host(copy), c.mem.host(block), size);

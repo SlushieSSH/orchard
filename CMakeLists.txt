@@ -59,6 +59,7 @@ add_library(orchard_core STATIC
     src/frameworks/Foundation/plist_bridge.cpp
     src/frameworks/Foundation/system.cpp
     src/frameworks/Foundation/urlsession.cpp
+    src/frameworks/Foundation/containers_io.cpp
     src/frameworks/Foundation/runtime_classes.cpp
     src/objc/runtime.cpp
     src/frameworks/UIKit/application.cpp
@@ -73,13 +74,18 @@ add_library(orchard_core STATIC
     src/frameworks/Metal/msl.cpp
     src/frameworks/Metal/render.cpp
     src/frameworks/SDKs/firebase.cpp
+    src/frameworks/SDKs/tracking.cpp
     src/frameworks/SystemConfiguration/reachability.cpp
+    src/frameworks/Network/network.cpp
     src/frameworks/Audio/audio.cpp
+    src/frameworks/Audio/decode.cpp
+    src/frameworks/Audio/mixer.cpp
+    src/frameworks/Audio/player.cpp
     src/objc/libobjc.cpp
     src/objc/nsobject.cpp
 )
 target_include_directories(orchard_core PUBLIC src)
-target_link_libraries(orchard_core PUBLIC orchard_loader dynarmic d3d11 dxgi d3dcompiler windowscodecs ole32 winhttp comctl32 dbghelp psapi)
+target_link_libraries(orchard_core PUBLIC orchard_loader dynarmic d3d11 dxgi d3dcompiler windowscodecs ole32 winhttp comctl32 dbghelp psapi mfplat mfreadwrite mfuuid shlwapi)
 target_compile_options(orchard_core PRIVATE ${ORCHARD_FLAGS})
 
 add_executable(orchard src/main.cpp)
@@ -101,6 +107,10 @@ target_compile_options(orchard-dsc PRIVATE ${ORCHARD_FLAGS})
 add_executable(orchard-unzbm tools/unzbm/main.cpp)
 target_link_libraries(orchard-unzbm PRIVATE orchard_core)
 target_compile_options(orchard-unzbm PRIVATE ${ORCHARD_FLAGS})
+
+add_executable(orchard-audiotest tools/audiotest/main.cpp)
+target_link_libraries(orchard-audiotest PRIVATE orchard_core)
+target_compile_options(orchard-audiotest PRIVATE ${ORCHARD_FLAGS})
 
 add_executable(orchard-msltest tools/msltest/main.cpp)
 target_link_libraries(orchard-msltest PRIVATE orchard_core)

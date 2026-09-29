@@ -23,10 +23,15 @@ void register_audio(objc::ObjcRuntime& o);
 namespace orchard::sdk
 {
 void register_firebase(objc::ObjcRuntime& o);
+void register_tracking(objc::ObjcRuntime& o);
 }
 namespace orchard::sc
 {
 void register_system_configuration(objc::ObjcRuntime& o);
+}
+namespace orchard::network
+{
+void register_network(objc::ObjcRuntime& o);
 }
 
 namespace orchard::uikit
@@ -404,7 +409,9 @@ void register_uikit(objc::ObjcRuntime& o)
     register_cg(o.rt.hle);
     metal::register_metal(o);
     sdk::register_firebase(o);
+    sdk::register_tracking(o);
     sc::register_system_configuration(o);
+    network::register_network(o);
     audio::register_audio(o);
 }
 

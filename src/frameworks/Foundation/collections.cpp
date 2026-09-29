@@ -1,3 +1,4 @@
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -135,6 +136,12 @@ void release_contents(Cpu& c, Id obj)
         }
     if (auto* d = std::get_if<DataData>(data.get()))
         if (d->guest) c.rt.heap.free(d->guest);
+}
+
+void ignored_nil(const char* what, Cpu& c)
+{
+    static std::atomic<bool> reported{false};
+    if (!reported.exchange(true)) std::fprintf(stderr, "[objc] %s from %s, ignored\n", what, c.rt.describe(c.lr()).c_str());
 }
 
 void fast_enumerate(Cpu& c, const std::vector<Id>& items)
@@ -318,7 +325,7 @@ void register_arrays(objc::ObjcRuntime& o)
     });
 
     o.method("NSMutableArray", "addObject:", [](Cpu& c) {
-        if (!c.arg(2)) return c.stop("-[NSMutableArray addObject:] with nil");
+        if (!c.arg(2)) return ignored_nil("-[NSMutableArray addObject:] with nil", c);
         store().get<ArrayData>(c.arg(0)).items.push_back(retain(c, c.arg(2)));
     });
     o.method("NSMutableArray", "addObjectsFromArray:", [](Cpu& c) {
@@ -501,7 +508,7 @@ void register_dictionaries(objc::ObjcRuntime& o)
     });
 
     o.method("NSMutableDictionary", "setObject:forKey:", [](Cpu& c) {
-        if (!c.arg(2)) return c.stop("-[NSMutableDictionary setObject:forKey:] with nil object");
+        if (!c.arg(2)) return ignored_nil("-[NSMutableDictionary setObject:forKey:] with nil object", c);
         dict_set(c, c.arg(0), c.arg(3), c.arg(2));
     });
     o.method("NSMutableDictionary", "setObject:forKeyedSubscript:", [](Cpu& c) {
@@ -558,6 +565,12 @@ void register_sets(objc::ObjcRuntime& o)
         c.ret(autorelease(c, s));
     });
     o.method("NSSet", "init", [](Cpu& c) { store().get<SetData>(c.arg(0)); });
+    o.method("NSSet", "initWithObjects:", [](Cpu& c) {
+        store().get<SetData>(c.arg(0));
+        for (Id i : variadic_objects(c, c.arg(2)))
+            s_add(c, c.arg(0), i);
+        c.ret(c.arg(0));
+    });
     o.method("NSSet", "initWithArray:", [](Cpu& c) {
         store().get<SetData>(c.arg(0));
         for (Id i : array_items(c, c.arg(2)))
@@ -651,6 +664,76 @@ void register_numbers(objc::ObjcRuntime& o)
     o.class_method("NSNumber", "numberWithBool:", [](Cpu& c) { c.ret(s_make(c, 'B', c.arg(2) & 1, 0, 0)); });
     o.class_method("NSNumber", "numberWithFloat:", [](Cpu& c) { c.ret(s_make(c, 'f', 0, 0, c.s(0))); });
     o.class_method("NSNumber", "numberWithDouble:", [](Cpu& c) { c.ret(s_make(c, 'd', 0, 0, c.d(0))); });
+    o.method("NSNumber", "initWithInt:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'i', int32_t(c.arg(2)), 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithInteger:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'q', int64_t(c.arg(2)), 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithLong:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'q', int64_t(c.arg(2)), 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithLongLong:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'q', int64_t(c.arg(2)), 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithShort:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 's', int16_t(c.arg(2)), 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithChar:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'c', int8_t(c.arg(2)), 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithUnsignedInt:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'I', 0, uint32_t(c.arg(2)), 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithUnsignedInteger:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'Q', 0, c.arg(2), 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithUnsignedLong:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'Q', 0, c.arg(2), 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithUnsignedLongLong:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'Q', 0, c.arg(2), 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithUnsignedChar:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'C', 0, uint8_t(c.arg(2)), 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithBool:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'B', c.arg(2) & 1, 0, 0));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithFloat:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'f', 0, 0, c.s(0)));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
+    o.method("NSNumber", "initWithDouble:", [](Cpu& c) {
+        Id n = objc(c).retain(s_make(c, 'd', 0, 0, c.d(0)));
+        objc(c).dispose(c.arg(0));
+        c.ret(n);
+    });
 
     auto value = [](Cpu& c) {
         NumberData n;

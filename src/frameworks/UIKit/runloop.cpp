@@ -420,6 +420,11 @@ void register_run_loops(objc::ObjcRuntime& o)
                           "_CFRunLoopRemoveSource"})
         h.fn(n, [](Cpu& c) {});
     h.fn("_CFRunLoopAddTimer", [](Cpu& c) { schedule(c, c.arg(1)); });
+    h.fn("_CFRunLoopObserverCreate", [](Cpu& c) { c.ret(objc(c).alloc_instance(objc(c).host_class("OrchardCFRunLoopObserver"))); });
+    h.fn("_CFRunLoopObserverCreateWithHandler",
+         [](Cpu& c) { c.ret(objc(c).alloc_instance(objc(c).host_class("OrchardCFRunLoopObserver"))); });
+    for (const char* n : {"_CFRunLoopObserverInvalidate", "_CFRunLoopObserverGetContext"})
+        h.fn(n, [](Cpu& c) { c.ret(0); });
     auto mode = [](Runtime& rt, const char16_t* value) {
         GuestAddr var = rt.mem.alloc_system(8, 8);
         rt.mem.write<uint64_t>(var, foundation::new_string(rt, value));

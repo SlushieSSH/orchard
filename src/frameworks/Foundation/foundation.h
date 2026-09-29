@@ -42,6 +42,7 @@ void register_json(objc::ObjcRuntime& rt);
 void register_system(objc::ObjcRuntime& rt);
 void register_runtime_classes(objc::ObjcRuntime& rt);
 void register_url_session(objc::ObjcRuntime& rt);
+void register_containers_io(objc::ObjcRuntime& rt);
 
 Id date_with_reference_seconds(Cpu& c, double seconds);
 bool date_seconds(Cpu& c, Id obj, double& out);

@@ -428,16 +428,23 @@ void register_mutexes(Hle& h)
     });
 
     auto unfair_lock = [](Cpu& c) {
-        if (!lock(c, mutexes.get(c.arg(0)))) c.exit_thread();
+        if (!lock(c, mutexes.get(c.arg(0)))) return c.exit_thread();
+        c.mem.write<uint32_t>(c.arg(0), uint32_t(0x1000 + c.thread_id));
     };
-    auto unfair_unlock = [](Cpu& c) { unlock(c, mutexes.get(c.arg(0))); };
+    auto unfair_unlock = [](Cpu& c) {
+        c.mem.write<uint32_t>(c.arg(0), 0);
+        unlock(c, mutexes.get(c.arg(0)));
+    };
     h.fn("_os_unfair_lock_lock", unfair_lock);
     h.fn("_os_unfair_lock_unlock", unfair_unlock);
     h.fn("_os_unfair_lock_trylock", [](Cpu& c) {
         bool busy = false;
         lock(c, mutexes.get(c.arg(0)), true, &busy);
+        if (!busy) c.mem.write<uint32_t>(c.arg(0), uint32_t(0x1000 + c.thread_id));
         c.ret(!busy);
     });
+    h.fn("_os_unfair_lock_assert_owner", [](Cpu& c) {});
+    h.fn("_os_unfair_lock_assert_not_owner", [](Cpu& c) {});
     h.fn("_OSSpinLockLock", unfair_lock);
     h.fn("_OSSpinLockUnlock", unfair_unlock);
 }

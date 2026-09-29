@@ -10,8 +10,9 @@ Orchard is heavily AI assisted, but it is tested by humans and built under human
 ## Current status
 
 - Crossy Road 7.13.2 is playable with touch and saves, and it can go online
-- Subway Surfers 3.69.1 starts but stops before gameplay
-- Sound works in Unity games, while other audio APIs are still silent
+- Subway Surfers 3.69.1 is playable too, though it can freeze for a moment when a run starts
+- Sound works in Unity games, while the other iOS audio APIs are in but not tested in a game yet
+- Apps that need iOS 17 or newer don't run yet, since Orchard uses iOS 16.7 system files
 - Graphics go through a Metal to Direct3D 11 layer, so games that render with OpenGL ES or depend on compute shaders will not display correctly
 - The first launch of a game stutters while its shaders compile, but they are cached on disk so later launches are smooth
 
@@ -110,3 +111,4 @@ For debugging:
 - `orchard-imports`: lists the system symbols an app imports
 - `orchard-unzbm`: decompresses LZBITMAP compressed cache files
 - `orchard-cputest`: JIT smoke test
+- `orchard-audiotest`: decodes a sound file and prints its format and level, `--play` plays it

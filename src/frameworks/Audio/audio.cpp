@@ -343,21 +343,28 @@ void register_audio_units(Hle& h)
 void register_queues_and_files(Hle& h)
 {
     constexpr uint64_t kUnsupported = 0x7479703f;
-    for (const char* n : {"_AudioQueueNewOutput", "_AudioQueueNewInput", "_AudioFileOpenWithCallbacks"})
+    for (const char* n :
+         {"_AudioFileOpenWithCallbacks", "_AudioFileOpenURL", "_AudioQueueOfflineRender", "_AudioQueueSetOfflineRenderFormat",
+          "_AudioFileClose", "_AudioFileGetProperty", "_AudioFileGetPropertyInfo", "_AudioFileReadPacketData"})
         h.fn(n, [](Cpu& c) { c.ret(kUnsupported); });
-    for (const char* n : {"_AudioQueueAllocateBuffer", "_AudioQueueAllocateBufferWithPacketDescriptions", "_AudioQueueDispose",
-                          "_AudioQueueEnqueueBuffer", "_AudioQueueFlush", "_AudioQueueOfflineRender", "_AudioQueuePause",
-                          "_AudioQueueSetOfflineRenderFormat", "_AudioQueueSetProperty", "_AudioQueueStart", "_AudioQueueStop",
-                          "_AudioFileClose", "_AudioFileGetProperty", "_AudioFileGetPropertyInfo", "_AudioFileReadPacketData"})
-        h.fn(n, [](Cpu& c) { c.ret(kUnsupported); });
-    h.fn("_AudioServicesCreateSystemSoundID", [](Cpu& c) {
-        c.mem.write<uint32_t>(c.arg(1), 4096);
-        c.ret(0);
+    auto cmtime = [](Cpu& c, int64_t value, int32_t timescale) {
+        GuestAddr out = c.x(8);
+        c.mem.write<int64_t>(out, value);
+        c.mem.write<int32_t>(out + 8, timescale);
+        c.mem.write<uint32_t>(out + 12, timescale > 0 ? 1 : 0);
+        c.mem.write<int64_t>(out + 16, 0);
+    };
+    static decltype(cmtime) s_cmtime = cmtime;
+    h.fn("_CMTimeMake", [](Cpu& c) { s_cmtime(c, int64_t(c.arg(0)), int32_t(c.arg(1))); });
+    h.fn("_CMTimeMakeWithSeconds", [](Cpu& c) {
+        int32_t scale = int32_t(c.arg(0)) > 0 ? int32_t(c.arg(0)) : 600;
+        s_cmtime(c, int64_t(c.d(0) * scale), scale);
     });
-    for (const char* n : {"_AudioServicesDisposeSystemSoundID", "_AudioServicesPlaySystemSound", "_AudioServicesAddSystemSoundCompletion",
-                          "_AudioServicesRemoveSystemSoundCompletion", "_AudioServicesSetProperty"})
-        h.fn(n, [](Cpu& c) { c.ret(0); });
-    h.fn("_AudioServicesPlaySystemSoundWithCompletion", [](Cpu& c) {});
+    h.fn("_CMTimeGetSeconds", [](Cpu& c) {
+        int64_t value = c.mem.read<int64_t>(c.arg(0));
+        int32_t scale = c.mem.read<int32_t>(c.arg(0) + 8);
+        c.set_d(0, scale > 0 ? double(value) / scale : 0.0);
+    });
 }
 
 void register_session(objc::ObjcRuntime& o)
@@ -399,11 +406,14 @@ void register_session(objc::ObjcRuntime& o)
 
 }
 
+void register_players(objc::ObjcRuntime& o);
+
 void register_audio(objc::ObjcRuntime& o)
 {
     register_audio_units(o.rt.hle);
     register_queues_and_files(o.rt.hle);
     register_session(o);
+    register_players(o);
 }
 
 }
