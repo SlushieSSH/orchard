@@ -11,7 +11,7 @@ Orchard is heavily AI assisted, but it is tested by humans and built under human
 
 - Crossy Road 7.13.2 is playable with touch and saves, and it can go online
 - Subway Surfers 3.69.1 starts but stops before gameplay
-- Audio output is not implemented yet
+- Sound works in Unity games, while other audio APIs are still silent
 - Graphics go through a Metal to Direct3D 11 layer, so games that render with OpenGL ES or depend on compute shaders will not display correctly
 - The first launch of a game stutters while its shaders compile, but they are cached on disk so later launches are smooth
 
@@ -93,6 +93,8 @@ Options:
 - `--screenshot <file.png>`: save the last frame when Orchard exits
 - `--quit-after <seconds>`: exit after the given time
 - `--lenient`: continue past unimplemented functions instead of stopping
+
+To test a whole folder of IPAs at once, `orchard.exe --compat <folder> [seconds]` runs each one and writes `compat.md` into that folder, showing how far every game got and which missing functions it hit most
 
 For debugging:
 

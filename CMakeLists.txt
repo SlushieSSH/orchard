@@ -36,6 +36,7 @@ add_library(orchard_core STATIC
     src/host/profiler.cpp
     src/host/memstats.cpp
     src/host/launcher.cpp
+    src/host/compat.cpp
     src/loader/linker.cpp
     src/loader/dyld_cache.cpp
     src/loader/cache_images.cpp

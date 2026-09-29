@@ -361,7 +361,11 @@ void run_until(Cpu& c, double seconds)
     double end = now_seconds() + seconds;
     do
     {
-        if (!run_loop_turn(c, std::max(0.0, std::min(end - now_seconds(), 1.0 / 120)))) std::_Exit(0);
+        if (!run_loop_turn(c, std::max(0.0, std::min(end - now_seconds(), 1.0 / 120))))
+        {
+            std::fflush(nullptr);
+            std::_Exit(0);
+        }
     } while (!c.stopped() && now_seconds() < end);
 }
 

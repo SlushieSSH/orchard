@@ -213,6 +213,7 @@ void application_main(Cpu& c)
         {
             std::printf("[UIKit] window closed\n");
             std::fflush(stdout);
+            std::fflush(nullptr);
             std::_Exit(0);
         }
     }

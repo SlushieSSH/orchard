@@ -1,6 +1,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <string>
 
 #include "core/runtime.h"
 #include "cpu/cpu.h"
@@ -124,8 +126,15 @@ void begin(Cpu& c, double x, double y)
         hit = c.call(imp, {window, objc(c).sel("hitTest:withEvent:"), g_event});
     }
     touches().get(touch).view = hit ? hit : window;
-    auto* k = objc(c).class_of(touches().get(touch).view);
-    std::printf("[UIKit] touch at %.0f,%.0f -> %s\n", x, y, k ? k->name.c_str() : "?");
+    static bool log_touches = [] {
+        const char* t = std::getenv("ORCHARD_TRACE");
+        return t && std::string(t).find("touch") != std::string::npos;
+    }();
+    if (log_touches)
+    {
+        auto* k = objc(c).class_of(touches().get(touch).view);
+        std::printf("[UIKit] touch at %.0f,%.0f -> %s\n", x, y, k ? k->name.c_str() : "?");
+    }
     dispatch(c);
 }
 

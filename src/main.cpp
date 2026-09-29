@@ -13,6 +13,7 @@
 #include "core/threads.h"
 #include "cpu/cpu.h"
 #include "frameworks/UIKit/uikit.h"
+#include "host/compat.h"
 #include "host/launcher.h"
 #include "host/memstats.h"
 #include "host/permission.h"
@@ -124,6 +125,11 @@ int main(int argc, char** argv)
         return ok ? 0 : 1;
     }
     fs::path exe_dir = fs::absolute(argv[0]).parent_path();
+    if (first == "--compat" && argc >= 3)
+    {
+        double seconds = argc >= 4 ? std::atof(argv[3]) : 60;
+        return run_compat(fs::absolute(argv[0]), fs::absolute(argv[2]), seconds);
+    }
     auto cache_in = [](const fs::path& dir) {
         for (fs::path candidate : {dir / "cache" / "dyld_shared_cache_arm64", dir / "external/ios-16.7.16/cache/dyld_shared_cache_arm64"})
             if (fs::exists(candidate)) return candidate;
