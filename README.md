@@ -1,5 +1,7 @@
 # Orchard
 
+Orchard is an hobby project, please do not expect updates too frequently
+
 Orchard is an iOS emulator for Windows written in C++ that runs 64-bit iOS apps by recompiling their ARM64 code with dynarmic and implementing the parts of iOS they call into, similar to how Wine runs Windows programs on Linux, and since it is in early development its behavior can change a lot between builds
 
 Orchard is heavily AI assisted, but it is tested by humans and built under human direction and cooperation
